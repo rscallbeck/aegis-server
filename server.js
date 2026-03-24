@@ -8,7 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import crypto from 'crypto';
-import { fetchDailySeed } from './src/workers/daily-vrf-seed.ts'; 
+import { fetchDailySeed } from './src/workers/daily-vrf-seed.js'; 
 import cron from 'node-cron';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -43,7 +43,7 @@ const io = new Server(httpsServer, {
   cors: { origin: CORS_ORIGIN, methods: ["GET", "POST"] }
 });
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 // 🚨 NEW: Dynamic Chainlink Seed Variables
 let ACTIVE_SERVER_SEED = null;

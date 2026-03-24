@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -14,34 +14,32 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 console.log("Daily VRF Seed Worker Initialized.");
 
-export async function fetchDailySeed(): Promise<void> {
+export async function fetchDailySeed() {
   console.log("🎲 Waking up to fetch daily Chainlink VRF seed...");
 
-  // 1. Strict Environment Variable Checks (Moved inside so it waits for server.js to load .env)
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const RPC_URL = process.env.RPC_URL;
-  const HOUSE_WALLET_PRIVATE_KEY = process.env.HOUSE_WALLET_PRIVATE_KEY;
-  const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !RPC_URL || !HOUSE_WALLET_PRIVATE_KEY || !CONTRACT_ADDRESS) {
-    console.error("❌ Missing required environment variables. Check your .env file.");
-    return; // 🚨 CHANGED: Use return instead of process.exit() so the server stays alive!
-  }
-
   try {
-    // 2. Setup Supabase
-    const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // 1. Strict Environment Variable Checks (Moved inside so it waits for server.js to load .env)
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const RPC_URL = process.env.RPC_URL;
+    const HOUSE_WALLET_PRIVATE_KEY = process.env.HOUSE_WALLET_PRIVATE_KEY;
+    const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 
-    // 3. Setup Ethers & Blockchain Connection
-    const provider = new ethers.JsonRpcProvider(RPC_URL); 
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !RPC_URL || !HOUSE_WALLET_PRIVATE_KEY || !CONTRACT_ADDRESS) {
+      console.error("❌ Missing required environment variables. Check your .env file.");
+      return; // 🚨 CHANGED: Use return instead of process.exit() so the server stays alive!
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
     const wallet = new ethers.Wallet(HOUSE_WALLET_PRIVATE_KEY, provider);
 
-    const contractABI: string[] = [
+    // Minimal ABI needed to request the seed and listen for the event
+    const contractABI = [
       "function requestNewSeed() external returns (uint256)",
       "event SeedGenerated(uint256 indexed requestId, uint256 randomSeed)"
     ];
-
+    
     const vrfContract = new ethers.Contract(CONTRACT_ADDRESS, contractABI, wallet);
 
     // Request the seed from the smart contract
@@ -53,10 +51,10 @@ export async function fetchDailySeed(): Promise<void> {
     console.log("✅ Transaction confirmed. Waiting for Chainlink Oracle response...");
 
     // Listen for the oracle to call back with the random number
-    vrfContract.once("SeedGenerated", async (requestId: bigint, randomSeed: bigint) => {
+    vrfContract.once("SeedGenerated", async (requestId, randomSeed) => {
       console.log(`🔥 SUCCESS! Chainlink delivered seed for Request ID: ${requestId.toString()}`);
       
-      const casinoSalt: string = crypto.randomBytes(32).toString('hex');
+      const casinoSalt = crypto.randomBytes(32).toString('hex');
       
       const { error } = await supabase
         .from('daily_seeds')
@@ -80,5 +78,3 @@ export async function fetchDailySeed(): Promise<void> {
     // 🚨 REMOVED process.exit(1)
   }
 }
-
-// 🚨 REMOVED the trailing fetchDailySeed() call so it doesn't run automatically on import
