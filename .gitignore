@@ -1,4 +1,12 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Supabase
+.branches
+.temp
+
+# dotenvx
+.env.keys
+.env.local
+.env.*.local
 
 # dependencies
 /lib
@@ -33,6 +41,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+.env
 
 # vercel
 .vercel
