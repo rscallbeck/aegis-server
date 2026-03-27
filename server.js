@@ -43,7 +43,7 @@ const io = new Server(httpsServer, {
   cors: { origin: CORS_ORIGIN, methods: ["GET", "POST"] }
 });
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 // 🚨 NEW: Dynamic Chainlink Seed Variables
 let ACTIVE_SERVER_SEED = null;
