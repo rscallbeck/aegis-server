@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createHmac } from "https://deno.land/std@0.168.0/node/crypto.ts";
+import { serve } from "std/http/server.ts";
+import { createHmac } from "std/node/crypto.ts";
 
 interface MinesRequest {
   serverSeed: string;
@@ -62,7 +62,13 @@ serve(async (req) => {
       JSON.stringify({ minePositions }),
       { headers: { "Content-Type": "application/json" } }
     );
-  } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 400 });
+  } catch (error: unknown) {
+    // 🚨 FIX: Type-check the error before reading .message
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 });
