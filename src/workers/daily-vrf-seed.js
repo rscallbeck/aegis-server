@@ -19,7 +19,7 @@ export async function fetchDailySeed() {
 
   try {
     // 1. Strict Environment Variable Checks (Moved inside so it waits for server.js to load .env)
-    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const RPC_URL = process.env.RPC_URL;
     const HOUSE_WALLET_PRIVATE_KEY = process.env.HOUSE_WALLET_PRIVATE_KEY;
