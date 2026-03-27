@@ -42,7 +42,7 @@ serve(async (req: Request) => {
     const newBalance = currentBalance - betAmount;
     await supabase.from('profiles').upsert({ id: user.id, balance_usd: newBalance });
 
-// 2. Auto-Generate Provably Fair Seeds if missing
+    // 2. Auto-Generate Provably Fair Seeds if missing
     let { data: seedPair } = await supabase
       .from('seed_pairs') // Matches SQL
       .select('*')
