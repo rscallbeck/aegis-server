@@ -20,21 +20,21 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
       containers:
-      - name: aegis-server
-        image: your-docker-registry/aegis-server:latest # Update with your image tag
-        imagePullPolicy: Always
+      - name: server
+        image: aegis-server:__VERSION__
         ports:
         - containerPort: 3001
         envFrom:
         - secretRef:
-            name: aegis-server-env # Pulls in the Supabase keys from Step 2
+            name: aegis-secrets # Contains Supabase & VRF keys
         resources:
           requests:
             memory: "256Mi"
             cpu: "250m"
           limits:
-            memory: "512Mi"
             cpu: "500m"
+            memory: "512Mi"
+        imagePullPolicy: Always
         volumeMounts:
         - name: tls-certs
           mountPath: "/usr/src/app/certificates"
