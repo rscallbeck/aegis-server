@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // 🚨 CHANGED: Explicitly tell dotenv to look two folders up for the master .env file
-dotenv.config({ path: path.join(__dirname, '../.env') });
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 console.log("Daily VRF Seed Worker Initialized.");
 
@@ -22,17 +22,17 @@ export async function fetchDailySeed() {
     const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const RPC_URL = process.env.RPC_URL;
-    const HOUSE_WALLET_PRIVATE_KEY = process.env.HOUSE_WALLET_PRIVATE_KEY;
-    const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
+    const HOUSE_PRIVATE_KEY = process.env.HOUSE_WALLET_PRIVATE_KEY;
+    const CONTRACT_ADDRESS = process.env.CHAINLINKVRF_CONTRACT_ADDRESS;
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !RPC_URL || !HOUSE_WALLET_PRIVATE_KEY || !CONTRACT_ADDRESS) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !RPC_URL || !HOUSE_PRIVATE_KEY || !CONTRACT_ADDRESS) {
       console.error("❌ Missing required environment variables. Check your .env file.");
       return; // 🚨 CHANGED: Use return instead of process.exit() so the server stays alive!
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const provider = new ethers.JsonRpcProvider(RPC_URL);
-    const wallet = new ethers.Wallet(HOUSE_WALLET_PRIVATE_KEY, provider);
+    const wallet = new ethers.Wallet(HOUSE_PRIVATE_KEY, provider);
 
     // Minimal ABI needed to request the seed and listen for the event
     const contractABI = [
