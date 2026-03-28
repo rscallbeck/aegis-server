@@ -2,7 +2,7 @@
 FROM node:20-alpine
 
 # Set the working directory
-WORKDIR /usr/src/app
+WORKDIR /usr/src
 
 # Set environment to production
 ENV NODE_ENV=production
@@ -23,7 +23,7 @@ COPY . .
 
 # Create a non-root user for security (Standard security practice for crypto apps)
 RUN addgroup -S aegisgroup && adduser -S aegisuser -G aegisgroup
-RUN chown -R aegisuser:aegisgroup /usr/src/app
+RUN chown -R aegisuser:aegisgroup /usr/src
 USER aegisuser
 
 # Expose the WebSocket port

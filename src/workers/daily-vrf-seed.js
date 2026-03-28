@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // 🚨 CHANGED: Explicitly tell dotenv to look two folders up for the master .env file
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 console.log("Daily VRF Seed Worker Initialized.");
 

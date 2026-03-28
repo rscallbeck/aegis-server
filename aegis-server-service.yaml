@@ -4,11 +4,10 @@ metadata:
   name: aegis-server-svc
   namespace: aegis-casino
 spec:
-  type: ClusterIP
+  type: NodePort
   ports:
   - port: 3001
     targetPort: 3001
-    protocol: TCP
-    name: websocket
+    nodePort: 30001
   selector:
     app: aegis-server

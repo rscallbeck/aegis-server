@@ -3,5 +3,8 @@
   "deno.enablePaths": [
     "supabase/functions"
   ],
-  "deno.unstable": true
+  "deno.unstable": true,
+  "deno.suggest.imports.hosts": {
+    "https://deno.land": true
+  }
 }

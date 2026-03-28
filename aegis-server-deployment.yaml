@@ -6,7 +6,7 @@ metadata:
   labels:
     app: aegis-server
 spec:
-  replicas: 2 # Run 2 instances for high availability
+  replicas: 1 
   selector:
     matchLabels:
       app: aegis-server
@@ -15,7 +15,6 @@ spec:
       labels:
         app: aegis-server
     spec:
-      # Security Context to enforce non-root execution at the Pod level
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -26,7 +25,7 @@ spec:
         - containerPort: 3001
         envFrom:
         - secretRef:
-            name: aegis-server-env # <--- CHANGED FROM aegis-secrets
+            name: aegis-server-env
         resources:
           requests:
             memory: "256Mi"
@@ -36,11 +35,24 @@ spec:
             memory: "512Mi"
         imagePullPolicy: Never
         volumeMounts:
-        - name: tls-certs
-          mountPath: "/usr/src/app/certificates"
-          readOnly: true
+          - name: tls-certs
+            mountPath: "/usr/src/certificates"
+            readOnly: true
       volumes:
       - name: tls-certs
         secret:
           secretName: aegis-server-tls # You will create this secret with your certs
-  
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aegis-server-svc
+  namespace: aegis-casino
+spec:
+  type: NodePort
+  ports:
+  - port: 3001
+    targetPort: 3001
+    nodePort: 30001
+  selector:
+    app: aegis-server
