@@ -1,8 +1,8 @@
 # Use a lightweight, secure Node.js Alpine image
-FROM node:20-alpine
+FROM node:20-slim
 
 # Set the working directory
-WORKDIR /usr/src
+WORKDIR /usr/src/app
 
 # Set environment to production
 ENV NODE_ENV=production
@@ -13,21 +13,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 # Copy the rest of the application code
-# COPY . .
-#COPY worker/ src/
-#COPY supabase/ src/
-
-#COPY ./x/a.txt ./y/a.txt /no_parents/
-#COPY --parents ./x/a.txt ./y/a.txt /parents/
-
-# /no_parents/a.txt
-# /parents/x/a.txt
-# /parents/y/a.txt
-
-
-COPY --exclude=./certificates/ . .
-
-
+COPY . .
 
 # IMPORTANT: The current server.js imports a .ts file directly:
 # import { fetchDailySeed } from './src/workers/daily-vrf-seed.ts';
@@ -36,8 +22,8 @@ COPY --exclude=./certificates/ . .
 # Alternatively, you can pre-compile the TS to JS.
 
 # Create a non-root user for security (Standard security practice for crypto apps)
-RUN addgroup -S aegisgroup && adduser -S aegisuser -G aegisgroup
-RUN chown -R aegisuser:aegisgroup /usr/src
+RUN groupadd -r aegisgroup && useradd -r -g aegisgroup aegisuser
+RUN chown -R aegisuser:aegisgroup /usr/src/app
 # COPY --from=builder --chown=aegisuser:aegisgroup /usr/src/app/apps/casino-web/.next/standalone ./
 
 USER aegisuser
