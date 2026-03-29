@@ -1,6 +1,6 @@
+import process from 'node:process';
 import { ethers } from 'ethers';
 import { createClient } from '@supabase/supabase-js';
-import { process } from 'node/process';
 
 console.log("Daily VRF Seed Worker Initialized.");
 
@@ -14,7 +14,7 @@ export async function fetchDailySeed() {
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !RPC_URL || !HOUSE_PRIVATE_KEY || !CONTRACT_ADDRESS) {
+    if (!supabaseUrl || !supabaseKey ) {
       console.error("❌ Missing required environment variables. Check your .env file.");
       return; 
     }
@@ -52,6 +52,11 @@ export async function fetchDailySeed() {
     const RPC_URL = process.env.RPC_URL;
     const HOUSE_PRIVATE_KEY = process.env.HOUSE_WALLET_PRIVATE_KEY;
     const CONTRACT_ADDRESS = process.env.CHAINLINKVRF_CONTRACT_ADDRESS;
+
+    if (!RPC_URL || !HOUSE_PRIVATE_KEY || !CONTRACT_ADDRESS) {
+      console.error("❌ Missing required environment variables. Check your .env file.");
+      return; 
+    }
 
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const wallet = new ethers.Wallet(HOUSE_PRIVATE_KEY, provider);

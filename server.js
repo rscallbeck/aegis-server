@@ -1,16 +1,16 @@
 import express from 'express';
-import https from 'https'; 
-import fs from 'fs';       
-import path from 'path';   
-import { fileURLToPath } from 'url';
-import { Server } from 'socket.io';
-import { createClient } from '@supabase/supabase-js';
+import fs from 'node:fs';
+import https from 'node:https';
+import process from 'node:process';
+import path from 'node:path';   
 import dotenv from 'dotenv';
 import cors from 'cors';
 import crypto from 'crypto';
-import { fetchDailySeed } from './src/workers/daily-vrf-seed.js'; 
 import cron from 'node-cron';
-import process from 'node/process';
+import { fileURLToPath } from 'url';
+import { Server } from 'socket.io';
+import { createClient } from '@supabase/supabase-js';
+import { fetchDailySeed } from './src/workers/daily-vrf-seed.js'; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,7 +29,7 @@ const HOUSE_EDGE_RTP = 50; // 1 in 50 instant crash (98% RTP)
 const app = express();
 app.use(cors({ origin: CORS_ORIGIN }));
 
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.send('🟢 Aegis Crash Server is running and ready for Socket.io connections!');
 });
 
@@ -91,7 +91,7 @@ console.log('Forcing an initial VRF fetch for testing...');
 fetchDailySeed();
 
 let currentRoundId = 1;
-let gameState = {
+const gameState = {
   status: 'starting',
   multiplier: 1.00,
   crashPoint: 0,
@@ -100,7 +100,8 @@ let gameState = {
   activeBets: {},
   history: [] 
 };
-let chatHistory = [];
+
+const chatHistory = [];
 
 // 🚨 CHANGED: Now uses dynamic Chainlink seeds
 function generateCrashPoint(serverSeed, salt, roundId) {
@@ -114,7 +115,7 @@ function generateCrashPoint(serverSeed, salt, roundId) {
   // 98% RTP (1 in 50 instant crash)
   if (h % HOUSE_EDGE_RTP === 0) return 1.00;
 
-  let crashPoint = Math.floor((100 * e - h) / (e - h)) / 100.0;
+  const crashPoint = Math.floor((100 * e - h) / (e - h)) / 100.0;
   return Math.min(Math.max(1.00, crashPoint), 1000000); 
 }
 
