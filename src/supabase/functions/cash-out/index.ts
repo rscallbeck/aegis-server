@@ -28,7 +28,7 @@ serve(async (req: Request) => {
 
     // 2. Fetch Active Game State
     const { data: game, error: fetchError } = await supabase
-      .from("mines_games")
+      .from("aegis_project_schema.mines_games")
       .select("*")
       .eq("id", gameId)
       .eq("user_id", user.id) // Ensure they own the game
@@ -55,7 +55,7 @@ serve(async (req: Request) => {
 
     // 5. Deposit Winnings to Profile Balance
     const { data: profile, error: profileError } = await supabase
-      .from('profiles')
+      .from('aegis_project_schema.profiles')
       .select('balance_usd')
       .eq('id', user.id)
       .single();
@@ -64,7 +64,7 @@ serve(async (req: Request) => {
 
     const newBalance = Number(profile.balance_usd) + finalPayout;
 
-    await supabase.from('profiles').update({ balance_usd: newBalance }).eq('id', user.id);
+    await supabase.from('aegis_project_schema.profiles').update({ balance_usd: newBalance }).eq('id', user.id);
 
     // ✅ CORRECT SUCCESS RETURN: Includes the new minePositions data
     return new Response(JSON.stringify({ 

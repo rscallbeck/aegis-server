@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-// UPDATED: Import the Total Payout function instead!
 import { calculateTotalPayout } from '../_shared/betting-logic.ts';
 
 const corsHeaders = {
@@ -23,7 +22,7 @@ serve(async (req: Request) => {
     
     // 1. Fetch Game State
     const { data: game, error: fetchError } = await supabase
-      .from("mines_games")
+      .from("aegis_project_schema.mines_games")
       .select("*")
       .eq("id", gameId)
       .single();
@@ -63,7 +62,7 @@ serve(async (req: Request) => {
 
     // 3. Update Database
     const { error: updateError } = await supabase
-      .from("mines_games")
+      .from("aegis_project_schema.mines_games")
       .update(updateData)
       .eq("id", gameId);
 

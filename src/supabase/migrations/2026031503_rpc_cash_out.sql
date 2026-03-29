@@ -11,7 +11,7 @@ DECLARE
 BEGIN
   -- 1. Lock the row to prevent race conditions (double cash-outs)
   SELECT status INTO v_current_status 
-  FROM mines_games 
+  FROM aegis_project_schema.mines_games 
   WHERE id = p_game_id AND user_id = p_user_id 
   FOR UPDATE;
 
@@ -21,14 +21,14 @@ BEGIN
   END IF;
 
   -- 3. Update the Game State
-  UPDATE mines_games
+  UPDATE aegis_project_schema.mines_games
   SET 
     status = 'cashed_out', 
     final_payout = p_payout
   WHERE id = p_game_id;
 
   -- 4. Update the User's Balance
-  UPDATE profiles
+  UPDATE aegis_project_schema.profiles
   SET balance_usd = balance_usd + p_payout
   WHERE id = p_user_id;
 

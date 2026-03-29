@@ -27,7 +27,7 @@ serve(async (req: Request) => {
 
     // 1. Dev Faucet & Balance Check
     const { data: profile } = await supabase
-      .from('profiles')
+      .from('aegis_project_schema.profiles')
       .select('balance_usd')
       .eq('id', user.id)
       .single();
@@ -44,7 +44,7 @@ serve(async (req: Request) => {
 
     // 2. Auto-Generate Provably Fair Seeds if missing
     let { data: seedPair } = await supabase
-      .from('seed_pairs') // Matches SQL
+      .from('aegis_project_schema.seed_pairs') // Matches SQL
       .select('*')
       .eq('user_id', user.id)
       .eq('is_active', true)
@@ -57,7 +57,7 @@ serve(async (req: Request) => {
       const clientSeed = "client_" + Math.random().toString(36).substring(2, 10);
 
       const { data: newSeed, error: seedError } = await supabase
-        .from('seed_pairs')
+        .from('aegis_project_schema.seed_pairs')
         .insert({
           user_id: user.id,
           server_seed_raw: serverSeedRaw, // Matches SQL
@@ -74,7 +74,7 @@ serve(async (req: Request) => {
     }
 
     const newNonce = seedPair.nonce + 1;
-    await supabase.from('seed_pairs').update({ nonce: newNonce }).eq('id', seedPair.id);
+    await supabase.from('aegis_project_schema.seed_pairs').update({ nonce: newNonce }).eq('id', seedPair.id);
 
     // 3. Generate Mines via Fisher-Yates
     const seedString = `${seedPair.server_seed_raw}:${seedPair.client_seed}:${newNonce}`;
@@ -95,7 +95,7 @@ serve(async (req: Request) => {
 
     // 4. Create the Game Record
     const { data: game, error: insertError } = await supabase
-      .from('mines_games')
+      .from('aegis_project_schema.mines_games')
       .insert({
         user_id: user.id,
         seed_pair_id: seedPair.id, // Matches SQL

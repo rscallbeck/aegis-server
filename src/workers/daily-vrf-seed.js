@@ -1,16 +1,6 @@
 import { ethers } from 'ethers';
 import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-// Reconstruct __dirname for ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// 🚨 CHANGED: Explicitly tell dotenv to look two folders up for the master .env file
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+import { process } from 'node/process';
 
 console.log("Daily VRF Seed Worker Initialized.");
 
@@ -18,19 +8,51 @@ export async function fetchDailySeed() {
   console.log("🎲 Waking up to fetch daily Chainlink VRF seed...");
 
   try {
-    // 1. Strict Environment Variable Checks (Moved inside so it waits for server.js to load .env)
-    const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    // Initialize Supabase Service Role client (Requires the master key to check global tables)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !RPC_URL || !HOUSE_PRIVATE_KEY || !CONTRACT_ADDRESS) {
+      console.error("❌ Missing required environment variables. Check your .env file.");
+      return; 
+    }
+
+    // 1. Query the database for the single most recently created seed
+    const { data: latestSeed, error: dbError } = await supabase
+      .from('daily_seeds')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    // Ignore PGRST116, which just means "No rows found" (e.g., the very first time the server boots)
+    if (dbError && dbError.code !== 'PGRST116') {
+      console.error("Database error checking recent seeds:", dbError);
+      return;
+    }
+
+    // 2. Calculate the time difference if a seed exists
+    if (latestSeed) {
+      const lastSeedDate = new Date(latestSeed.created_at);
+      const now = new Date();
+      
+      // Convert millisecond difference into hours
+      const hoursSinceLastSeed = (now - lastSeedDate) / (1000 * 60 * 60);
+
+      if (hoursSinceLastSeed < 24) {
+        console.log(`✅ Daily VRF Seed is up to date (Last fetched ${hoursSinceLastSeed.toFixed(1)} hours ago). Skipping Chainlink request.`);
+        return;
+      }
+    }
+
+    console.log('🎲 24 hours have passed (or no seed exists). Waking up to fetch daily Chainlink VRF seed...');
+
     const RPC_URL = process.env.RPC_URL;
     const HOUSE_PRIVATE_KEY = process.env.HOUSE_WALLET_PRIVATE_KEY;
     const CONTRACT_ADDRESS = process.env.CHAINLINKVRF_CONTRACT_ADDRESS;
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !RPC_URL || !HOUSE_PRIVATE_KEY || !CONTRACT_ADDRESS) {
-      console.error("❌ Missing required environment variables. Check your .env file.");
-      return; // 🚨 CHANGED: Use return instead of process.exit() so the server stays alive!
-    }
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const wallet = new ethers.Wallet(HOUSE_PRIVATE_KEY, provider);
 
@@ -69,12 +91,10 @@ export async function fetchDailySeed() {
       } else {
         console.log("💾 Daily Seed and Secret Salt locked into Supabase. You are ready for the day!");
       }
-      // 🚨 REMOVED process.exit(0) here so the crash loop continues running!
     });
 
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error("❌ Worker failed:", errorMessage);
-    // 🚨 REMOVED process.exit(1)
   }
 }

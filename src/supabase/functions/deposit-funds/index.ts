@@ -26,7 +26,7 @@ serve(async (req: Request) => {
 
     // 🚨 FIX 1: Use maybeSingle() so it doesn't crash if you don't have a profile yet!
     const { data: profile, error: profileError } = await supabase
-      .from('profiles')
+      .from('aegis_project_schema.profiles')
       .select('balance_usd')
       .eq('id', user.id)
       .maybeSingle();
@@ -39,7 +39,7 @@ serve(async (req: Request) => {
 
     // 🚨 FIX 2: Use upsert() to automatically create the row if it's missing!
     const { error: updateError } = await supabase
-      .from('profiles')
+      .from('aegis_project_schema.profiles')
       .upsert({ id: user.id, balance_usd: newBalance });
 
     if (updateError) throw updateError;
