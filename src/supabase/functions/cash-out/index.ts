@@ -43,7 +43,7 @@ serve(async (req: Request) => {
 
     // 4. Mark Game as Cashed Out
     const { error: updateError } = await supabase
-      .from("mines_games")
+      .from("aegis_project_schema.mines_games")
       .update({
         status: 'cashed_out',
         final_payout: finalPayout,

@@ -21,7 +21,7 @@ export async function fetchDailySeed() {
 
     // 1. Query the database for the single most recently created seed
     const { data: latestSeed, error: dbError } = await supabase
-      .from('daily_seeds')
+      .from('aegis_project_schema.daily_seeds')
       .select('created_at')
       .order('created_at', { ascending: false })
       .limit(1)
@@ -84,7 +84,7 @@ export async function fetchDailySeed() {
       const casinoSalt = crypto.randomBytes(32).toString('hex');
       
       const { error } = await supabase
-        .from('daily_seeds')
+        .from('aegis_project_schema.daily_seeds')
         .insert({
           vrf_request_id: requestId.toString(),
           chainlink_seed: randomSeed.toString(),
