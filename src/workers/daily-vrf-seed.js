@@ -10,19 +10,12 @@ export async function fetchDailySeed() {
   console.log("🎲 Waking up to fetch daily Chainlink VRF seed...");
 
   try {
-
-    // Initialize Supabase Service Role client (Requires the master key to check global tables)
+    // Initialize Supabase Service Role client
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    const contract = new ethers.Contract(
-      "0xfe8EE1c2c067b0D242358bFf31bC240ef850E782",
-      ContractArtifact.abi, 
-      walletOrProvider
-    );  
-
-    if (!supabaseUrl || !supabaseKey ) {
-      console.error("❌ Missing required environment variables. Check your .env file.");
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ Missing Supabase environment variables. Check your .env file.");
       return; 
     }
 
@@ -36,7 +29,7 @@ export async function fetchDailySeed() {
       .limit(1)
       .single();
 
-    // Ignore PGRST116, which just means "No rows found" (e.g., the very first time the server boots)
+    // Ignore PGRST116 (No rows found)
     if (dbError && dbError.code !== 'PGRST116') {
       console.error("Database error checking recent seeds:", dbError);
       return;
@@ -47,7 +40,6 @@ export async function fetchDailySeed() {
       const lastSeedDate = new Date(latestSeed.created_at);
       const now = new Date();
       
-      // Convert millisecond difference into hours
       const hoursSinceLastSeed = (now - lastSeedDate) / (1000 * 60 * 60);
 
       if (hoursSinceLastSeed < 24) {
@@ -58,42 +50,23 @@ export async function fetchDailySeed() {
 
     console.log('🎲 24 hours have passed (or no seed exists). Waking up to fetch daily Chainlink VRF seed...');
 
+    // 3. Setup Blockchain Connection
     const RPC_URL = process.env.RPC_URL;
     const HOUSE_PRIVATE_KEY = process.env.HOUSE_WALLET_PRIVATE_KEY;
-    const CONTRACT_ADDRESS = process.env.CHAINLINKVRF_CONTRACT_ADDRESS;
+    const CONTRACT_ADDRESS = process.env.CHAINLINKVRF_CONTRACT_ADDRESS || "0xfe8EE1c2c067b0D242358bFf31bC240ef850E782";
 
     if (!RPC_URL || !HOUSE_PRIVATE_KEY || !CONTRACT_ADDRESS) {
-      console.error("❌ Missing required environment variables. Check your .env file.");
+      console.error("❌ Missing Web3 environment variables. Check your .env file.");
       return; 
     }
 
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const wallet = new ethers.Wallet(HOUSE_PRIVATE_KEY, provider);
 
-    // Minimal ABI needed to request the seed and listen for the event
-    const contractABI = [
-      "function requestNewSeed() external returns (uint256)",
-      "event SeedGenerated(uint256 indexed requestId, uint256 randomSeed)"
-    ];
-    
-    const vrfContract = new ethers.Contract(CONTRACT_ADDRESS, contractABI, wallet);
+    // Initialize the contract USING THE FULL ABI to catch custom errors
+    const vrfContract = new ethers.Contract(CONTRACT_ADDRESS, ContractArtifact.abi, wallet);
 
-    // Request the seed from the smart contract
-    console.log("📡 Sending request to Base Sepolia...");
-    
-    // 1. Fetch the next available nonce, including pending transactions in the mempool
-    const currentNonce = await wallet.getNonce("pending");
-    
-    // 2. Pass the explicit nonce into the contract method's overrides object
-    const tx = await vrfContract.requestNewSeed({ nonce: currentNonce });
-    
-    console.log(`⏳ Transaction sent! Hash: ${tx.hash}`);
-    
-    await tx.wait();
-
-    console.log("✅ Transaction confirmed. Waiting for Chainlink Oracle response...");
-
-    // Listen for the oracle to call back with the random number
+    // 4. Set up the listener BEFORE sending the transaction to avoid race conditions
     vrfContract.once("SeedGenerated", async (requestId, randomSeed) => {
       console.log(`🔥 SUCCESS! Chainlink delivered seed for Request ID: ${requestId.toString()}`);
       
@@ -114,8 +87,21 @@ export async function fetchDailySeed() {
       }
     });
 
+    // 5. Request the seed from the smart contract
+    console.log("📡 Sending request to Base Sepolia...");
+    
+    const currentNonce = await wallet.getNonce("pending");
+    const tx = await vrfContract.requestNewSeed({ nonce: currentNonce });
+    
+    console.log(`⏳ Transaction sent! Hash: ${tx.hash}`);
+    await tx.wait();
+    console.log("✅ Transaction confirmed. Waiting for Chainlink Oracle response...");
+
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error("❌ Worker failed:", errorMessage);
+    
+    // Because we are using the full ABI now, if this fails due to a custom error, 
+    // it will log the actual error name (e.g., 'UnauthorizedAccess') here!
   }
 }
