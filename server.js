@@ -6,6 +6,7 @@ import https from 'node:https';
 import process from 'node:process';
 import path from 'node:path';   
 import cron from 'node-cron';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
 import { createClient } from '@supabase/supabase-js';
