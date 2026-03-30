@@ -44,7 +44,20 @@ const io = new Server(httpsServer, {
   cors: { origin: CORS_ORIGIN, methods: ["GET", "POST"] }
 });
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+// Initialize Supabase Service Role client (Requires the master key to check global tables)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseKey ) {
+  console.error("❌ Missing required environment variables. Check your .env file.");
+  process.exit(0);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  db: {
+    schema: 'aegis_project_schema'
+  }
+});
 
 // 🚨 NEW: Dynamic Chainlink Seed Variables
 let ACTIVE_SERVER_SEED = null;
@@ -53,7 +66,7 @@ let ACTIVE_VRF_REQUEST_ID = null;
 
 async function loadLatestSeed() {
   const { data, error } = await supabase
-    .from('aegis_project_schema.daily_seeds')
+    .from('daily_seeds')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(1)
@@ -152,8 +165,8 @@ async function runGameLoop() {
           bet.cashedOut = true;
           bet.winnings = bet.betAmount * bet.targetMultiplier;
           
-          supabase.from('aegis_project_schema.profiles').select('balance_usd').eq('id', userId).single().then(({ data }) => {
-            if (data) supabase.from('aegis_project_schema.profiles').update({ balance_usd: data.balance_usd + bet.winnings }).eq('id', userId);
+          supabase.from('profiles').select('balance_usd').eq('id', userId).single().then(({ data }) => {
+            if (data) supabase.from('profiles').update({ balance_usd: data.balance_usd + bet.winnings }).eq('id', userId);
           });
 
           io.to(bet.socketId).emit('bet-won');
@@ -199,10 +212,10 @@ async function handlePlaceBet(socket, { token, betAmount, targetMultiplier }) {
 
     // 🚨 TODO (SECURITY): Replace with a Supabase RPC call for atomic decrement 
     // to avoid TOCTOU (Race condition) vulnerability.
-    const { data: profile } = await supabase.from('aegis_project_schema.profiles').select('balance_usd').eq('id', user.id).single();
+    const { data: profile } = await supabase.from('profiles').select('balance_usd').eq('id', user.id).single();
     if (!profile || profile.balance_usd < betAmount) throw new Error('Insufficient balance');
 
-    await supabase.from('aegis_project_schema.profiles').update({ balance_usd: profile.balance_usd - betAmount }).eq('id', user.id);
+    await supabase.from('profiles').update({ balance_usd: profile.balance_usd - betAmount }).eq('id', user.id);
     
     gameState.activeBets[user.id] = { socketId: socket.id, betAmount, targetMultiplier, cashedOut: false, winnings: 0 };
     socket.emit('bet-accepted');

@@ -12,16 +12,21 @@ export async function fetchDailySeed() {
     // Initialize Supabase Service Role client (Requires the master key to check global tables)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
+    
     if (!supabaseUrl || !supabaseKey ) {
       console.error("❌ Missing required environment variables. Check your .env file.");
       return; 
     }
 
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      db: {
+        schema: 'aegis_project_schema'
+      }
+    });
+
     // 1. Query the database for the single most recently created seed
     const { data: latestSeed, error: dbError } = await supabase
-      .from('aegis_project_schema.daily_seeds')
+      .from('daily_seeds')
       .select('created_at')
       .order('created_at', { ascending: false })
       .limit(1)
@@ -84,7 +89,7 @@ export async function fetchDailySeed() {
       const casinoSalt = crypto.randomBytes(32).toString('hex');
       
       const { error } = await supabase
-        .from('aegis_project_schema.daily_seeds')
+        .from('daily_seeds')
         .insert({
           vrf_request_id: requestId.toString(),
           chainlink_seed: randomSeed.toString(),
