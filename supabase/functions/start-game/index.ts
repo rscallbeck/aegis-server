@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { serve } from 'std/http/server.ts';
+import { createClient } from "@supabase/supabase-js";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,7 +44,7 @@ serve(async (req: Request) => {
 
     // 2. Auto-Generate Provably Fair Seeds if missing
     let { data: seedPair } = await supabase
-      .from('aegis_project_schema.seed_pairs') // Matches SQL
+      .from('seed_pairs') // Matches SQL
       .select('*')
       .eq('user_id', user.id)
       .eq('is_active', true)
@@ -57,7 +57,7 @@ serve(async (req: Request) => {
       const clientSeed = "client_" + Math.random().toString(36).substring(2, 10);
 
       const { data: newSeed, error: seedError } = await supabase
-        .from('aegis_project_schema.seed_pairs')
+        .from('seed_pairs')
         .insert({
           user_id: user.id,
           server_seed_raw: serverSeedRaw, // Matches SQL
@@ -74,7 +74,7 @@ serve(async (req: Request) => {
     }
 
     const newNonce = seedPair.nonce + 1;
-    await supabase.from('aegis_project_schema.seed_pairs').update({ nonce: newNonce }).eq('id', seedPair.id);
+    await supabase.from('seed_pairs').update({ nonce: newNonce }).eq('id', seedPair.id);
 
     // 3. Generate Mines via Fisher-Yates
     const seedString = `${seedPair.server_seed_raw}:${seedPair.client_seed}:${newNonce}`;

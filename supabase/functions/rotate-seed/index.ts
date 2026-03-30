@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { serve } from 'std/http/server.ts';
+import { createClient } from "@supabase/supabase-js";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,7 +29,7 @@ serve(async (req: Request) => {
 
     // 2. Find currently active seed
     const { data: oldSeed } = await supabase
-      .from('aegis_project_schema.seed_pairs')
+      .from('seed_pairs')
       .select('*')
       .eq('user_id', user.id)
       .eq('is_active', true)
@@ -37,7 +37,7 @@ serve(async (req: Request) => {
 
     if (oldSeed) {
       // Deactivate it!
-      await supabase.from('aegis_project_schema.seed_pairs').update({ is_active: false }).eq('id', oldSeed.id);
+      await supabase.from('seed_pairs').update({ is_active: false }).eq('id', oldSeed.id);
     }
 
     // 3. Generate New Seed Pair
@@ -49,7 +49,7 @@ serve(async (req: Request) => {
     const clientSeed = customClientSeed || ("client_" + Math.random().toString(36).substring(2, 10));
 
     const { data: newSeed, error: insertError } = await supabase
-      .from('aegis_project_schema.seed_pairs')
+      .from('seed_pairs')
       .insert({
         user_id: user.id,
         server_seed_raw: serverSeedRaw,

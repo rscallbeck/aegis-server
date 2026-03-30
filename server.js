@@ -1,14 +1,13 @@
+import cors from 'cors';
+import dotenv from 'dotenv';
 import express from 'express';
 import fs from 'node:fs';
 import https from 'node:https';
 import process from 'node:process';
 import path from 'node:path';   
-import dotenv from 'dotenv';
-import cors from 'cors';
-import crypto from 'crypto';
 import cron from 'node-cron';
-import { fileURLToPath } from 'url';
-import { Server } from 'socket.io';
+import { fileURLToPath } from 'node:url';
+import { crypto, Server } from 'socket.io';
 import { createClient } from '@supabase/supabase-js';
 import { fetchDailySeed } from './src/workers/daily-vrf-seed.js'; 
 
@@ -16,7 +15,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // 🚨 CHANGED: Point one folder up to the master .env file
-dotenv.config({ path: path.join(__dirname, '../.env') });
+dotenv.config({ path: path.join(__dirname, './.env') });
 
 const PORT = process.env.PORT || 3001;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
@@ -45,7 +44,7 @@ const io = new Server(httpsServer, {
 });
 
 // Initialize Supabase Service Role client (Requires the master key to check global tables)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey ) {

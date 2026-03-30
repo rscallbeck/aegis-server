@@ -1,7 +1,7 @@
 -- ==========================================
 -- 1. PROFILES & WALLETS
 -- ========================================== 
-create table aegis_project_schema.profiles (
+create table profiles (
   id UUID references auth.users on delete CASCADE primary key,
   wallet_address TEXT unique,
   username TEXT unique,
@@ -14,9 +14,9 @@ create table aegis_project_schema.profiles (
 -- We store the hash of the server seed. The raw seed is only revealed 
 -- when the user rotates to a new seed pair.
 -- ========================================== 
-create table aegis_project_schema.seed_pairs (
+create table seed_pairs (
   id UUID default gen_random_uuid () primary key,
-  user_id UUID references aegis_project_schema.profiles (id),
+  user_id UUID references profiles (id),
   server_seed_hash TEXT not null,
   server_seed_raw TEXT, -- NULL until the seed is rotated/expired
   client_seed TEXT not null,
@@ -28,10 +28,10 @@ create table aegis_project_schema.seed_pairs (
 -- ==========================================
 -- 3. MINES GAMES
 -- ========================================== 
-create table aegis_project_schema.mines_games (
+create table mines_games (
   id UUID default gen_random_uuid () primary key,
-  user_id UUID references aegis_project_schema.profiles (id),
-  seed_pair_id UUID references aegis_project_schema.seed_pairs (id),
+  user_id UUID references profiles (id),
+  seed_pair_id UUID references seed_pairs (id),
   bet_amount DECIMAL(18, 8) not null,
   mine_count INTEGER not null,
   -- The "Hidden" State
@@ -46,7 +46,7 @@ create table aegis_project_schema.mines_games (
 -- ==========================================
 -- 4. Daily Seeds Table
 -- ==========================================
-create table aegis_project_schema.daily_seeds (
+create table daily_seeds (
   id uuid default gen_random_uuid () primary key,
   created_at timestamptz default now() not null,
   seed_value text not null
@@ -55,10 +55,10 @@ create table aegis_project_schema.daily_seeds (
 -- ==========================================
 -- 5. Crash Games Table
 -- ==========================================
-create table aegis_project_schema.crash_games (
+create table crash_games (
   id uuid default gen_random_uuid () primary key,
   created_at timestamptz default now() not null,
-  user_id uuid references aegis_project_schema.profiles (id) not null,
+  user_id uuid references profiles (id) not null,
   bet_amount numeric not null,
   cash_out_multiplier numeric,
   busted boolean default false,
@@ -69,7 +69,7 @@ create table aegis_project_schema.crash_games (
 -- 6. Crash Active Games Safe View
 -- ==========================================
 -- The 'security_invoker = on' flag ensures this view automatically respects the RLS policies of the crash_games table!
-create or replace view aegis_project_schema.crash_active_games_safe
+create or replace view crash_active_games_safe
 with
   (security_invoker = on) as
 select
@@ -78,7 +78,7 @@ select
   user_id,
   bet_amount
 from
-  aegis_project_schema.crash_games
+  crash_games
 where
   busted = false
   and profit is null;
@@ -91,7 +91,7 @@ where
 -- We do this by creating a SECURE VIEW or by using column-level security.
 -- Since Supabase RLS is row-based, the best practice for Project Aegis 
 -- is to use a View for the frontend that hides the column if status is 'active'.
-create view aegis_project_schema.mines_active_games_safe as
+create view mines_active_games_safe as
 select
   id,
   user_id,
@@ -106,4 +106,4 @@ select
     else mine_positions
   end as mine_positions
 from
-  aegis_project_schema.mines_games;
+  mines_games;
