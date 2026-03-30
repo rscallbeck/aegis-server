@@ -1,7 +1,8 @@
 import process from 'node:process';
 import crypto from 'node:crypto';
-import { ethers } from 'ethers';
 import { createClient } from '@supabase/supabase-js';
+import { ethers } from 'ethers';
+import ContractArtifact from '../abis/AegisVRF.json' with { type: "json" };
 
 console.log("Daily VRF Seed Worker Initialized.");
 
@@ -13,7 +14,13 @@ export async function fetchDailySeed() {
     // Initialize Supabase Service Role client (Requires the master key to check global tables)
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
+
+    const contract = new ethers.Contract(
+      "0xfe8EE1c2c067b0D242358bFf31bC240ef850E782",
+      ContractArtifact.abi, 
+      walletOrProvider
+    );  
+
     if (!supabaseUrl || !supabaseKey ) {
       console.error("❌ Missing required environment variables. Check your .env file.");
       return; 
@@ -73,10 +80,17 @@ export async function fetchDailySeed() {
 
     // Request the seed from the smart contract
     console.log("📡 Sending request to Base Sepolia...");
-    const tx = await vrfContract.requestNewSeed();
+    
+    // 1. Fetch the next available nonce, including pending transactions in the mempool
+    const currentNonce = await wallet.getNonce("pending");
+    
+    // 2. Pass the explicit nonce into the contract method's overrides object
+    const tx = await vrfContract.requestNewSeed({ nonce: currentNonce });
+    
     console.log(`⏳ Transaction sent! Hash: ${tx.hash}`);
     
     await tx.wait();
+
     console.log("✅ Transaction confirmed. Waiting for Chainlink Oracle response...");
 
     // Listen for the oracle to call back with the random number

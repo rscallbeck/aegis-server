@@ -15,6 +15,24 @@ RUN npm ci --omit=dev
 # Copy the rest of the application code
 COPY . .
 
+ARG SUPABASE_URL
+ARG SUPABASE_ANON_KEY
+ARG SERVER_URL
+ARG WALLET_CONNECT_PROJECT_ID
+ARG CONTRACT_ADDRESS
+ARG RPC_URL
+ARG SUPABASE_SERVICE_ROLE_KEY
+ARG SUPABASE_PUBLISHABLE_KEY
+
+ENV SUPABASE_URL=https://wvrzyxkjxyzzccmqiprz.supabase.co
+ENV SUPABASE_ANON_KEY=sb_publishable_PivOI-BiCaLweKwOEhaqnw_Ko5vh2jO
+ENV SERVER_URL=https://192.168.49.2:30001
+ENV WALLET_CONNECT_PROJECT_ID=f1d42de36341d8e2f6c3d951cb3ee55d
+ENV CONTRACT_ADDRESS=0x9926bFb634C86D0d102E14C1D68Bb6B5393e3723
+ENV RPC_URL=https://base-sepolia.infura.io/v3/228e978f498c4f6087aeddff058b263d
+ENV SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2cnp5eGtqeHl6emNjbXFpcHJ6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTMxODQzMywiZXhwIjoyMDg2ODk0NDMzfQ.sXeu0njkcnFkZ5d7Vai3PuelX3AVIvq5_HVdEjwGEOo
+ENV SUPABASE_PUBLISHABLE_KEY=sb_publishable_PivOI-BiCaLweKwOEhaqnw_Ko5vh2jO
+
 # IMPORTANT: The current server.js imports a .ts file directly:
 # import { fetchDailySeed } from './src/workers/daily-vrf-seed.ts';
 # Since Node natively struggles with TS imports without flags, 
@@ -32,5 +50,7 @@ USER aegisuser
 EXPOSE 3001
 
 # Start the server using tsx to support the TypeScript worker import
-CMD ["node", "server.js"]
+# CMD ["node", "server.js"]
+# npx tsx server.js
+CMD ["npx", "tsx", "server.js"]
 
