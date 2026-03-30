@@ -27,7 +27,7 @@ serve(async (req: Request) => {
 
     // 1. Dev Faucet & Balance Check
     const { data: profile } = await supabase
-      .from('aegis_project_schema.profiles')
+      .from('profiles')
       .select('balance_usd')
       .eq('id', user.id)
       .single();
@@ -95,7 +95,7 @@ serve(async (req: Request) => {
 
     // 4. Create the Game Record
     const { data: game, error: insertError } = await supabase
-      .from('aegis_project_schema.mines_games')
+      .from('mines_games')
       .insert({
         user_id: user.id,
         seed_pair_id: seedPair.id, // Matches SQL

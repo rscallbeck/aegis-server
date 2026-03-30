@@ -1,4 +1,5 @@
 import process from 'node:process';
+import crypto from 'node:crypto';
 import { ethers } from 'ethers';
 import { createClient } from '@supabase/supabase-js';
 
@@ -18,11 +19,7 @@ export async function fetchDailySeed() {
       return; 
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      db: {
-        schema: 'aegis_project_schema'
-      }
-    });
+    const supabase = createClient(supabaseUrl, supabaseKey, {});
 
     // 1. Query the database for the single most recently created seed
     const { data: latestSeed, error: dbError } = await supabase

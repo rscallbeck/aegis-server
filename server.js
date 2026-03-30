@@ -53,11 +53,7 @@ if (!supabaseUrl || !supabaseKey ) {
   process.exit(0);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  db: {
-    schema: 'aegis_project_schema'
-  }
-});
+const supabase = createClient(supabaseUrl, supabaseKey, {});
 
 // 🚨 NEW: Dynamic Chainlink Seed Variables
 let ACTIVE_SERVER_SEED = null;
@@ -85,7 +81,7 @@ async function loadLatestSeed() {
 }
 
 supabase.channel('seed-updates')
-  .on('postgres_changes', { event: 'INSERT', schema: 'aegis_project_schema', table: 'daily_seeds' }, (payload) => {
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'daily_seeds' }, (payload) => {
     console.log('\n🔄 NEW CHAINLINK SEED DETECTED! Updating game math for the next round...');
     ACTIVE_SERVER_SEED = payload.new.chainlink_seed;
     ACTIVE_SALT = payload.new.casino_salt;

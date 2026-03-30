@@ -22,7 +22,7 @@ serve(async (req: Request) => {
     
     // 1. Fetch Game State
     const { data: game, error: fetchError } = await supabase
-      .from("aegis_project_schema.mines_games")
+      .from("mines_games")
       .select("*")
       .eq("id", gameId)
       .single();
@@ -62,7 +62,7 @@ serve(async (req: Request) => {
 
     // 3. Update Database
     const { error: updateError } = await supabase
-      .from("aegis_project_schema.mines_games")
+      .from("mines_games")
       .update(updateData)
       .eq("id", gameId);
 
