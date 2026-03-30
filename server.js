@@ -7,7 +7,7 @@ import process from 'node:process';
 import path from 'node:path';   
 import cron from 'node-cron';
 import { fileURLToPath } from 'node:url';
-import { crypto, Server } from 'socket.io';
+import { Server } from 'socket.io';
 import { createClient } from '@supabase/supabase-js';
 import { fetchDailySeed } from './src/workers/daily-vrf-seed.js'; 
 

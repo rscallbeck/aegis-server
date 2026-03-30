@@ -28,6 +28,7 @@
         "npm:ethers@^6.16.0",
         "npm:express@^4.18.2",
         "npm:node-cron@^4.2.1",
+        "npm:node@20",
         "npm:postcss@^8.5.8",
         "npm:qr@~0.5.5",
         "npm:socket.io@^4.7.4",
