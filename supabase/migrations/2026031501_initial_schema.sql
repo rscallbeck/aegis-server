@@ -49,7 +49,9 @@ create table mines_games (
 create table daily_seeds (
   id uuid default gen_random_uuid () primary key,
   created_at timestamptz default now() not null,
-  seed_value text not null
+  vrf_request_id text not null,
+  chainlink_seed text not null,
+  casino_salt text not null
 );
 
 -- ==========================================

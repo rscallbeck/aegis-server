@@ -52,10 +52,10 @@ export async function fetchDailySeed() {
 
     // 3. Setup Blockchain Connection
     const RPC_URL = process.env.RPC_URL;
-    const HOUSE_PRIVATE_KEY = process.env.HOUSE_WALLET_PRIVATE_KEY;
-    const CONTRACT_ADDRESS = process.env.CHAINLINKVRF_CONTRACT_ADDRESS || "0xfe8EE1c2c067b0D242358bFf31bC240ef850E782";
+    const HOUSE_PRIVATE_KEY = process.env.HOUSE_PRIVATE_KEY;
+    const CHAINLINKVRF_CONTRACT_ADDRESS = process.env.CHAINLINKVRF_CONTRACT_ADDRESS;
 
-    if (!RPC_URL || !HOUSE_PRIVATE_KEY || !CONTRACT_ADDRESS) {
+    if (!RPC_URL || !HOUSE_PRIVATE_KEY || !CHAINLINKVRF_CONTRACT_ADDRESS) {
       console.error("❌ Missing Web3 environment variables. Check your .env file.");
       return; 
     }
@@ -64,7 +64,7 @@ export async function fetchDailySeed() {
     const wallet = new ethers.Wallet(HOUSE_PRIVATE_KEY, provider);
 
     // Initialize the contract USING THE FULL ABI to catch custom errors
-    const vrfContract = new ethers.Contract(CONTRACT_ADDRESS, ContractArtifact.abi, wallet);
+    const vrfContract = new ethers.Contract(CHAINLINKVRF_CONTRACT_ADDRESS, ContractArtifact.abi, wallet);
 
     // 4. Set up the listener BEFORE sending the transaction to avoid race conditions
     vrfContract.once("SeedGenerated", async (requestId, randomSeed) => {

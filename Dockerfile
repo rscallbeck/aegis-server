@@ -1,19 +1,42 @@
-# Use a lightweight, secure Node.js Alpine image
-FROM node:20-slim
+# ==========================================
+# STAGE 1: Prune the Monorepo
+# ==========================================
+FROM node:20-slim AS pruner
+WORKDIR /usr/src/app
 
-# Set the working directory
+# Install turbo globally to extract the specific workspace
+# RUN npm install
+CMD ["npm", "install"]
+
+COPY . .
+
+# Isolate the exact packages and files needed for casino-web
+RUN npm prune aegis-server --docker
+
+# ==========================================
+# STAGE 2: Install & Build
+# ==========================================
+FROM node:20-slim AS builder
 WORKDIR /usr/src/app
 
 # Set environment to production
 ENV NODE_ENV=production
 
-# Copy package files and install dependencies
+# First, only copy the isolated package.json files to cache the install step
+COPY --from=pruner /usr/src/app .
+#COPY --from=pruner /usr/src/app/out/package-lock.json ./package-lock.json
+
+RUN npm ci
+
+# Now copy the actual isolated source code
+# COPY --from=pruner /usr/src/app/out/full/ .
+COPY --from=pruner /usr/src/app .
+
 # We use ci (clean install) for predictable builds
-COPY package*.json ./
 RUN npm ci --omit=dev
 
 # Copy the rest of the application code
-COPY . .
+# COPY . .
 
 #ARG SUPABASE_URL
 #ARG SUPABASE_ANON_KEY
@@ -39,10 +62,22 @@ COPY . .
 # we'll use tsx which is already in your dependencies to run it.
 # Alternatively, you can pre-compile the TS to JS.
 
+# ==========================================
+# STAGE 3: Run the Production Server
+# ==========================================
+FROM node:20-slim AS runner
+WORKDIR /usr/src/app
+
+ENV NODE_ENV=production
+
 # Create a non-root user for security (Standard security practice for crypto apps)
 RUN groupadd -r aegisgroup && useradd -r -g aegisgroup aegisuser
 RUN chown -R aegisuser:aegisgroup /usr/src/app
 # COPY --from=builder --chown=aegisuser:aegisgroup /usr/src/app/apps/casino-web/.next/standalone ./
+
+#COPY --from=builder --chown=aegisuser:aegisgroup /usr/src/app/aegis-server/.next/standalone ./
+#COPY --from=builder --chown=aegisuser:aegisgroup /usr/src/app/aegis-server/.next/static ./aegis-server/.next/static
+COPY --from=builder --chown=aegisuser:aegisgroup /usr/src/app .
 
 USER aegisuser
 

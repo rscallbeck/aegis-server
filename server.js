@@ -18,8 +18,8 @@ const __dirname = path.dirname(__filename);
 // 🚨 CHANGED: Point one folder up to the master .env file
 dotenv.config({ path: path.join(__dirname, './.env') });
 
-const PORT = process.env.PORT || 3001;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+const PORT = process.env.PORT;
+const CORS_ORIGIN = process.env.CORS_ORIGIN;
 const TICK_RATE_MS = 50;
 const ROUND_START_TIME_SEC = 10;
 const ROUND_COOLDOWN_MS = 5000;
