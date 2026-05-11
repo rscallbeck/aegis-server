@@ -12,6 +12,9 @@ import { Server } from 'socket.io';
 import { createClient } from '@supabase/supabase-js';
 import { fetchDailySeed } from './src/workers/daily-vrf-seed.js'; 
 
+const WebSocket = require('ws');
+const ws = new WebSocket('ws://localhost:8080');
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
