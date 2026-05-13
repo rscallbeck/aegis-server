@@ -33,7 +33,7 @@ spec:
           limits:
             cpu: "500m"
             memory: "512Mi"
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         volumeMounts:
           - name: tls-certs
             mountPath: "/usr/src/app/certificates"
