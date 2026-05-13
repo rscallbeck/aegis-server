@@ -61,7 +61,7 @@ if (!supabaseUrl || !supabaseKey ) {
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
   global: {
-    WebSocket: WebSocket // 2. Inject it into the global config
+    transport: WebSocket // 2. Inject it into the global config
   }
 });
 

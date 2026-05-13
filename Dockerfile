@@ -1,7 +1,7 @@
 # ==========================================
 # STAGE 1: Prune the Monorepo
 # ==========================================
-FROM node:20-slim AS pruner
+FROM node:22-slim AS pruner
 WORKDIR /usr/src/app
 
 # Install turbo globally to extract the specific workspace
@@ -16,7 +16,7 @@ RUN npm prune aegis-server --docker
 # ==========================================
 # STAGE 2: Install & Build
 # ==========================================
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 WORKDIR /usr/src/app
 
 # Set environment to production
@@ -65,7 +65,7 @@ RUN npm ci --omit=dev
 # ==========================================
 # STAGE 3: Run the Production Server
 # ==========================================
-FROM node:20-slim AS runner
+FROM node:22-slim AS runner
 WORKDIR /usr/src/app
 
 ENV NODE_ENV=production
