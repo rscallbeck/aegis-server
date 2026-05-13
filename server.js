@@ -10,10 +10,11 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws'; // 1. Import the ws package
 import { fetchDailySeed } from './src/workers/daily-vrf-seed.js'; 
 
-const WebSocket = require('ws');
-const ws = new WebSocket('ws://localhost:8080');
+// const WebSocket = require('ws');
+// const ws = new WebSocket('ws://localhost:8080');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,7 +57,13 @@ if (!supabaseUrl || !supabaseKey ) {
   process.exit(0);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey, {});
+// const supabase = createClient(supabaseUrl, supabaseKey, {});
+
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  global: {
+    WebSocket: WebSocket // 2. Inject it into the global config
+  }
+});
 
 // 🚨 NEW: Dynamic Chainlink Seed Variables
 let ACTIVE_SERVER_SEED = null;
