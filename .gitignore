@@ -1,4 +1,9 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# Certs
+certificates
+*.pem
+
 # Supabase
 .branches
 .temp
@@ -58,5 +63,3 @@ next-env.d.ts
 !.vscode/extensions.json
 
 .deno_lsp/*
-
-certificates

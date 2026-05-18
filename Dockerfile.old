@@ -1,9 +1,10 @@
 # ==========================================
-# STAGE 1: Prune
+# STAGE 1: Prune the Monorepo
 # ==========================================
 FROM node:22-slim AS pruner
 WORKDIR /usr/src
 
+# Install turbo globally to extract the specific workspace
 # RUN npm install
 CMD ["npm", "install"]
 
@@ -17,6 +18,7 @@ RUN npm prune aegis-server --docker
 # ==========================================
 FROM node:22-slim AS builder
 WORKDIR /usr/src
+# Set environment to production
 ENV NODE_ENV=production
 
 # First, only copy the isolated package.json files to cache the install step

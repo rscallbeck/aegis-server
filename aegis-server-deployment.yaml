@@ -36,7 +36,7 @@ spec:
         imagePullPolicy: IfNotPresent
         volumeMounts:
           - name: tls-certs
-            mountPath: "/usr/src/app/certificates"
+            mountPath: "/usr/src/certificates"
             readOnly: true
       volumes:
       - name: tls-certs
