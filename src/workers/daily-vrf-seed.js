@@ -66,36 +66,54 @@ export async function fetchDailySeed() {
     // Initialize the contract USING THE FULL ABI to catch custom errors
     const vrfContract = new ethers.Contract(CHAINLINKVRF_CONTRACT_ADDRESS, ContractArtifact.abi, wallet);
 
-    // 4. Set up the listener BEFORE sending the transaction to avoid race conditions
-    vrfContract.once("SeedGenerated", async (requestId, randomSeed) => {
-      console.log(`🔥 SUCCESS! Chainlink delivered seed for Request ID: ${requestId.toString()}`);
-      
-      const casinoSalt = crypto.randomBytes(32).toString('hex');
-      
-      const { error } = await supabase
-        .from('daily_seeds')
-        .insert({
-          vrf_request_id: requestId.toString(),
-          chainlink_seed: randomSeed.toString(),
-          casino_salt: casinoSalt
-        });
-
-      if (error) {
-        console.error("❌ Failed to save to Supabase:", error);
-      } else {
-        console.log("💾 Daily Seed and Secret Salt locked into Supabase. You are ready for the day!");
-      }
-    });
-
-    // 5. Request the seed from the smart contract
+    // 4. Request the seed from the smart contract
     console.log("📡 Sending request to Base Sepolia...");
-    
+
     const currentNonce = await wallet.getNonce("pending");
     const tx = await vrfContract.requestNewSeed({ nonce: currentNonce });
-    
+
     console.log(`⏳ Transaction sent! Hash: ${tx.hash}`);
-    await tx.wait();
+    const receipt = await tx.wait();
     console.log("✅ Transaction confirmed. Waiting for Chainlink Oracle response...");
+
+    // 5. Poll for SeedGenerated using queryFilter (eth_getLogs) instead of
+    //    filter-based listeners — many RPC providers don't support eth_getFilterChanges.
+    const fromBlock = receipt.blockNumber;
+    const deadline = Date.now() + 10 * 60 * 1000;
+
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 15000));
+      const events = await vrfContract.queryFilter(
+        vrfContract.filters.SeedGenerated(),
+        fromBlock
+      );
+      if (events.length > 0) {
+        const { args } = events[0];
+        const requestId = args[0];
+        const randomSeed = args[1];
+
+        console.log(`🔥 SUCCESS! Chainlink delivered seed for Request ID: ${requestId.toString()}`);
+
+        const casinoSalt = crypto.randomBytes(32).toString('hex');
+
+        const { error } = await supabase
+          .from('daily_seeds')
+          .insert({
+            vrf_request_id: requestId.toString(),
+            chainlink_seed: randomSeed.toString(),
+            casino_salt: casinoSalt
+          });
+
+        if (error) {
+          console.error("❌ Failed to save to Supabase:", error);
+        } else {
+          console.log("💾 Daily Seed and Secret Salt locked into Supabase. You are ready for the day!");
+        }
+        return;
+      }
+    }
+
+    console.error("❌ Timed out waiting for Chainlink Oracle response after 10 minutes.");
 
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
