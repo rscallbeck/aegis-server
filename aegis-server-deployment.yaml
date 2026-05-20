@@ -33,15 +33,16 @@ spec:
           limits:
             cpu: "500m"
             memory: "512Mi"
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Never
         volumeMounts:
           - name: tls-certs
-            mountPath: "/usr/src/certificates"
+            mountPath: "/usr/src/app/certificates"
             readOnly: true
       volumes:
       - name: tls-certs
         secret:
-          secretName: aegis-server-tls # You will create this secret with your certs
+          secretName: aegis-server-tls
+          defaultMode: 0444
 ---
 apiVersion: v1
 kind: Service
