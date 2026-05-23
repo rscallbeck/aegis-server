@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
 import { fetchDailySeed } from './src/workers/daily-vrf-seed.js';
 import { initVault, isVaultReady, settleRound } from './src/vault.js';
+import { checkAllowed } from './src/geofence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,6 +35,25 @@ app.use(express.static(path.join(__dirname, 'public/client')));
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+
+// ─── Geofence check endpoint ───────────────────────────────────────────────
+// The static client calls this on load to decide whether to show the block screen.
+// Returns: { allowed, countryCode, country, reason }
+app.get('/api/geo-check', async (req, res) => {
+  try {
+    const result = await checkAllowed(req);
+    res.json({
+      allowed:     result.allowed,
+      countryCode: result.countryCode ?? null,
+      country:     result.country     ?? null,
+      reason:      result.reason,
+    });
+  } catch (err) {
+    console.error('[Geofence] /api/geo-check error:', err.message);
+    // Fail open — don't block users when the check itself errors
+    res.json({ allowed: true, countryCode: null, country: null, reason: 'error' });
+  }
 });
 
 // ─── SSL: read paths from env vars, fall back to the old hardcoded location ───
@@ -523,6 +543,26 @@ async function handleSendMessage(socket, { token, message }) {
     socket.emit('chat-error', 'Sign in to chat!');
   }
 }
+
+// ─── Socket.IO geofencing middleware ──────────────────────────────────────
+// Runs before every connection is accepted.  Blocked connections are refused
+// before any game state is sent to the client.
+io.use(async (socket, next) => {
+  try {
+    const result = await checkAllowed(socket.handshake);
+    if (!result.allowed) {
+      console.log(
+        `🚫 [Geofence] Blocked Socket.IO connection from ${result.ip}` +
+        (result.country ? ` (${result.country})` : ''),
+      );
+      return next(new Error('GEO_BLOCKED'));
+    }
+    next();
+  } catch (err) {
+    console.error('[Geofence] Socket middleware error:', err.message);
+    next(); // fail open
+  }
+});
 
 // ─── Socket connections ────────────────────────────────────────────────────
 io.on('connection', (socket) => {
