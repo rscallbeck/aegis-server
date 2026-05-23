@@ -13,6 +13,7 @@ import { Server } from 'socket.io';
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
 import { fetchDailySeed } from './src/workers/daily-vrf-seed.js';
+import { initVault, isVaultReady, settleRound } from './src/vault.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -121,6 +122,9 @@ cron.schedule('0 0 * * *', () => {
 // Fetch a seed immediately on boot so the first round has one
 console.log('Fetching initial VRF seed on boot...');
 fetchDailySeed();
+
+// ─── AegisVault (on-chain settlement) ──────────────────────────────────────
+initVault();
 
 // ─── Game state ────────────────────────────────────────────────────────────
 let currentRoundId = 1;
@@ -250,6 +254,22 @@ async function runGameLoop() {
           (async () => {
             try {
               await creditBalance(userId, bet.winnings);
+
+              // Persist cashout immediately (crash_point filled in at round end)
+              if (bet.dbId) {
+                supabase
+                  .from('crash_bets')
+                  .update({
+                    status:        'cashed_out',
+                    cashed_out_at: bet.targetMultiplier,
+                    final_payout:  bet.winnings,
+                  })
+                  .eq('id', bet.dbId)
+                  .then(({ error }) => {
+                    if (error) console.warn('⚠️  crash_bets auto-cashout update failed:', error.message);
+                  });
+              }
+
               io.to(bet.socketId).emit('bet-won', {
                 multiplier: bet.targetMultiplier,
                 winnings: bet.winnings,
@@ -279,6 +299,59 @@ async function runGameLoop() {
     console.log(`💥 CRASHED at ${gameState.multiplier.toFixed(2)}x | Provable hash: ${roundHash}`);
 
     io.emit('game-tick', gameState);
+
+    // ── Persist crash outcome for all bets in this round ───────────────────
+    // Auto-cashouts were already updated when they fired; we only need to
+    // finalize the bets that are still 'active' (i.e., player didn't cash out).
+    (async () => {
+      const crashMultiplier = parseFloat(gameState.multiplier.toFixed(2));
+      for (const bet of Object.values(gameState.activeBets)) {
+        if (!bet.dbId) continue;
+        if (bet.cashedOut) {
+          // Auto-cashout: crash_point is now known — fill it in
+          supabase
+            .from('crash_bets')
+            .update({ crash_point: crashMultiplier })
+            .eq('id', bet.dbId)
+            .then(({ error }) => {
+              if (error) console.warn('⚠️  crash_bets crash_point update failed:', error.message);
+            });
+        } else {
+          // Player did not cash out — mark as crashed with zero payout
+          supabase
+            .from('crash_bets')
+            .update({ status: 'crashed', crash_point: crashMultiplier, final_payout: 0 })
+            .eq('id', bet.dbId)
+            .then(({ error }) => {
+              if (error) console.warn('⚠️  crash_bets crashed update failed:', error.message);
+            });
+        }
+      }
+    })();
+
+    // ── On-chain settlement (fire-and-forget) ────────────────────────────────
+    // Call AegisVault.settleBet() for every bet this round.  We do this after
+    // emitting to clients so the crash is never delayed by RPC latency.
+    // If a player hasn't deposited to the vault yet the call will be skipped
+    // gracefully — Supabase balance_usd remains the operative ledger until
+    // the deposit/withdraw flow is live.
+    if (isVaultReady()) {
+      const betsToSettle = Object.values(gameState.activeBets)
+        .filter(bet => bet.walletAddress)
+        .map(bet => ({
+          playerAddress: bet.walletAddress,
+          betAmountEth:  bet.betAmount.toString(),
+          playerWon:     bet.cashedOut,
+          payoutEth:     bet.cashedOut ? bet.winnings.toString() : '0',
+        }));
+
+      if (betsToSettle.length > 0) {
+        console.log(`🏦 Settling ${betsToSettle.length} bet(s) on-chain for round ${currentRoundId}...`);
+        settleRound(betsToSettle).catch(err =>
+          console.error('❌ Vault settlement error:', err.message),
+        );
+      }
+    }
 
     currentRoundId++;
     await new Promise(r => setTimeout(r, ROUND_COOLDOWN_MS));
@@ -329,18 +402,52 @@ async function handlePlaceBet(socket, { token, betAmount, targetMultiplier }) {
       pendingBetUsers.delete(user.id);
     }
 
+    // Resolve wallet address from the user's Supabase email.
+    // verify-siwe encodes it as "{address}@web3.aegis", so we just parse the prefix.
+    let walletAddress = null;
+    try {
+      const { data: { user: authUser } } = await supabase.auth.admin.getUserById(user.id);
+      if (authUser?.email?.endsWith('@web3.aegis')) {
+        walletAddress = authUser.email.split('@')[0];
+      }
+    } catch (err) {
+      console.warn(`⚠️  Could not resolve wallet address for user ${user.id}:`, err.message);
+    }
+
+    // Persist the bet so the History page can show it
+    const { data: betRow, error: betInsertError } = await supabase
+      .from('crash_bets')
+      .insert({
+        user_id:           user.id,
+        round_id:          currentRoundId,
+        bet_amount:        betAmount,
+        target_multiplier: targetMultiplier,
+        status:            'active',
+      })
+      .select('id')
+      .single();
+
+    if (betInsertError) {
+      console.warn(`⚠️  Could not persist crash bet for user ${user.id}:`, betInsertError.message);
+    }
+
     gameState.activeBets[user.id] = {
       socketId: socket.id,
+      walletAddress,      // stored for vault settlement at round end
       betAmount,
       targetMultiplier,
       cashedOut: false,
       winnings: 0,
+      dbId: betRow?.id ?? null,   // for updating the record on cashout / crash
     };
 
     socket.emit('bet-accepted', { betAmount, targetMultiplier });
 
   } catch (err) {
-    pendingBetUsers.delete(token); // clean up if auth failed before we had the userId
+    // Note: pendingBetUsers only holds user.id values, which are only added AFTER
+    // auth succeeds. If we reach here due to an auth failure, nothing was added and
+    // there is nothing to clean up. The inner try/finally handles the success-then-
+    // deductBalance-fails case. No delete needed here.
     socket.emit('bet-error', err.message);
   }
 }
@@ -365,6 +472,21 @@ async function handleCashOut(socket, { token }) {
 
     // Credit the winnings atomically
     await creditBalance(user.id, bet.winnings);
+
+    // Update the bet record in the DB
+    if (bet.dbId) {
+      supabase
+        .from('crash_bets')
+        .update({
+          status:        'cashed_out',
+          cashed_out_at: cashOutMultiplier,
+          final_payout:  bet.winnings,
+        })
+        .eq('id', bet.dbId)
+        .then(({ error }) => {
+          if (error) console.warn(`⚠️  crash_bets update (cashout) failed:`, error.message);
+        });
+    }
 
     // Send back the multiplier and amount so the client can display them
     socket.emit('bet-won', {
