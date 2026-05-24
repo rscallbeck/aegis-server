@@ -6,20 +6,21 @@ import ContractArtifact from '../abis/AegisVRF.json' with { type: "json" };
 
 console.log("Daily VRF Seed Worker Initialized.");
 
+// ── Module-level Supabase client — created once, reused on every daily call ──
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = (supabaseUrl && supabaseKey)
+  ? createClient(supabaseUrl, supabaseKey)
+  : null;
+
 export async function fetchDailySeed() {
   console.log("🎲 Waking up to fetch daily Chainlink VRF seed...");
 
   try {
-    // Initialize Supabase Service Role client
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
+    if (!supabase) {
       console.error("❌ Missing Supabase environment variables. Check your .env file.");
-      return; 
+      return;
     }
-
-    const supabase = createClient(supabaseUrl, supabaseKey, {});
 
     // 1. Query the database for the single most recently created seed
     const { data: latestSeed, error: dbError } = await supabase

@@ -13,7 +13,7 @@ import { Server } from 'socket.io';
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
 import { fetchDailySeed } from './src/workers/daily-vrf-seed.js';
-import { initVault, isVaultReady, settleRound } from './src/vault.js';
+import { initVault, settleRound } from './src/vault.js';
 import { checkAllowed } from './src/geofence.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -28,6 +28,38 @@ const ROUND_START_TIME_SEC = 10;
 const ROUND_COOLDOWN_MS = 5000;
 const MAX_CHAT_HISTORY = 50;
 const HOUSE_EDGE_RTP = 50; // 1-in-50 instant crash → 98% RTP contribution
+
+// ─── Game limits ────────────────────────────────────────────────────────────
+const MAX_BET_AMOUNT = 10_000;        // Maximum single bet in USD
+const MAX_TARGET_MULTIPLIER = 1_000;  // Maximum auto-cashout multiplier
+
+// ─── Per-socket rate limiting ────────────────────────────────────────────────
+// Simple token-bucket: each socket gets RATE_LIMIT_CAPACITY tokens, replenished
+// at RATE_LIMIT_REFILL_MS.  Each event costs one token.  Prevents spam without
+// blocking legitimate fast players.
+const RATE_LIMIT_CAPACITY   = 10;      // max burst
+const RATE_LIMIT_REFILL_MS  = 1_000;  // refill one token per second
+
+const socketRateLimits = new Map(); // socketId → { tokens, lastRefill }
+
+function consumeRateLimit(socketId) {
+  const now = Date.now();
+  let bucket = socketRateLimits.get(socketId);
+  if (!bucket) {
+    bucket = { tokens: RATE_LIMIT_CAPACITY, lastRefill: now };
+    socketRateLimits.set(socketId, bucket);
+  }
+  // Refill based on time elapsed
+  const elapsed = now - bucket.lastRefill;
+  const refill   = Math.floor(elapsed / RATE_LIMIT_REFILL_MS);
+  if (refill > 0) {
+    bucket.tokens    = Math.min(RATE_LIMIT_CAPACITY, bucket.tokens + refill);
+    bucket.lastRefill = now;
+  }
+  if (bucket.tokens <= 0) return false; // rate-limited
+  bucket.tokens--;
+  return true;
+}
 
 const app = express();
 app.use(cors({ origin: CORS_ORIGIN }));
@@ -355,22 +387,21 @@ async function runGameLoop() {
     // If a player hasn't deposited to the vault yet the call will be skipped
     // gracefully — Supabase balance_usd remains the operative ledger until
     // the deposit/withdraw flow is live.
-    if (isVaultReady()) {
-      const betsToSettle = Object.values(gameState.activeBets)
-        .filter(bet => bet.walletAddress)
-        .map(bet => ({
-          playerAddress: bet.walletAddress,
-          betAmountEth:  bet.betAmount.toString(),
-          playerWon:     bet.cashedOut,
-          payoutEth:     bet.cashedOut ? bet.winnings.toString() : '0',
-        }));
+    // settleRound() is a no-op when the vault is not initialised, so no guard needed.
+    const betsToSettle = Object.values(gameState.activeBets)
+      .filter(bet => bet.walletAddress)
+      .map(bet => ({
+        playerAddress: bet.walletAddress,
+        betAmountEth:  bet.betAmount.toString(),
+        playerWon:     bet.cashedOut,
+        payoutEth:     bet.cashedOut ? bet.winnings.toString() : '0',
+      }));
 
-      if (betsToSettle.length > 0) {
-        console.log(`🏦 Settling ${betsToSettle.length} bet(s) on-chain for round ${currentRoundId}...`);
-        settleRound(betsToSettle).catch(err =>
-          console.error('❌ Vault settlement error:', err.message),
-        );
-      }
+    if (betsToSettle.length > 0) {
+      console.log(`🏦 Settling ${betsToSettle.length} bet(s) on-chain for round ${currentRoundId}...`);
+      settleRound(betsToSettle).catch(err =>
+        console.error('❌ Vault settlement error:', err.message),
+      );
     }
 
     currentRoundId++;
@@ -395,8 +426,14 @@ async function handlePlaceBet(socket, { token, betAmount, targetMultiplier }) {
     if (typeof betAmount !== 'number' || betAmount <= 0) {
       throw new Error('Invalid bet amount');
     }
+    if (betAmount > MAX_BET_AMOUNT) {
+      throw new Error(`Bet amount cannot exceed $${MAX_BET_AMOUNT}`);
+    }
     if (typeof targetMultiplier !== 'number' || targetMultiplier <= 1.0) {
       throw new Error('Target multiplier must be greater than 1.0');
+    }
+    if (targetMultiplier > MAX_TARGET_MULTIPLIER) {
+      throw new Error(`Target multiplier cannot exceed ${MAX_TARGET_MULTIPLIER}x`);
     }
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -569,9 +606,22 @@ io.on('connection', (socket) => {
   socket.emit('game-tick', gameState);
   socket.emit('chat-history', chatHistory);
 
-  socket.on('place-bet',    (data) => handlePlaceBet(socket, data));
-  socket.on('cash-out',     (data) => handleCashOut(socket, data));
-  socket.on('send-message', (data) => handleSendMessage(socket, data));
+  const rateGuard = (eventName, handler) => (data) => {
+    if (!consumeRateLimit(socket.id)) {
+      socket.emit('bet-error', 'Too many requests — please slow down.');
+      console.warn(`[RateLimit] socket=${socket.id} throttled on "${eventName}"`);
+      return;
+    }
+    handler(data);
+  };
+
+  socket.on('place-bet',    rateGuard('place-bet',    (data) => handlePlaceBet(socket, data)));
+  socket.on('cash-out',     rateGuard('cash-out',     (data) => handleCashOut(socket, data)));
+  socket.on('send-message', rateGuard('send-message', (data) => handleSendMessage(socket, data)));
+
+  socket.on('disconnect', () => {
+    socketRateLimits.delete(socket.id);
+  });
 });
 
 // ─── Start ─────────────────────────────────────────────────────────────────
