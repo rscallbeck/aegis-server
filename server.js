@@ -15,6 +15,7 @@ import WebSocket from 'ws';
 import { fetchDailySeed } from './src/workers/daily-vrf-seed.js';
 import { initVault, settleRound } from './src/vault.js';
 import { checkAllowed } from './src/geofence.js';
+import { spin as slotsSpin, SYMBOLS as SLOTS_SYMBOLS } from './src/games/slots.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -556,6 +557,61 @@ async function handleCashOut(socket, { token }) {
   }
 }
 
+// ─── Slots handler ────────────────────────────────────────────────────────────
+// Balances are mocked for now (UI-first sprint).  Real deduct/credit calls
+// will be added when Slots is wired up to Supabase in a later sprint.
+
+async function handleSlotsSpin(socket, { token, betAmount }) {
+  try {
+    // Input validation
+    if (typeof betAmount !== 'number' || betAmount <= 0) {
+      throw new Error('Invalid bet amount');
+    }
+    if (betAmount > MAX_BET_AMOUNT) {
+      throw new Error(`Bet amount cannot exceed $${MAX_BET_AMOUNT}`);
+    }
+
+    // Auth check (validates the JWT; balance deduction skipped until sprint N)
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) throw new Error('Unauthorized');
+
+    // Execute the spin (pure RNG — no state mutated server-side for slots)
+    const result = slotsSpin(betAmount);
+
+    // Persist to Supabase (non-blocking — don't await so latency doesn't affect client)
+    const winningLines = result.paylines.filter(p => p.payout > 0).length;
+    supabase.from('slots_bets').insert({
+      user_id:      user.id,
+      bet_amount:   betAmount,
+      total_payout: result.totalPayout,
+      net_result:   result.netResult,
+      multiplier:   result.totalPayout > 0 ? result.totalPayout / betAmount : null,
+      paylines_hit: winningLines,
+      status:       result.totalPayout > 0 ? 'won' : 'lost',
+    }).then(({ error: dbErr }) => {
+      if (dbErr) console.error('[slots] DB insert failed:', dbErr.message);
+    });
+
+    socket.emit('slots-result', {
+      grid:        result.grid,       // number[3][3] — grid[reelIdx][rowIdx]
+      paylines:    result.paylines,   // [{ index, symbols, multiplier, payout }]
+      totalPayout: result.totalPayout,
+      netResult:   result.netResult,
+      betAmount,
+    });
+
+  } catch (err) {
+    socket.emit('slots-error', err.message);
+  }
+}
+
+// ─── Slots symbols manifest endpoint ─────────────────────────────────────────
+// The client fetches this once on mount so it can render symbol names/emoji
+// without duplicating the definition.
+app.get('/api/slots/symbols', (_req, res) => {
+  res.json(SLOTS_SYMBOLS);
+});
+
 async function handleSendMessage(socket, { token, message }) {
   try {
     if (typeof message !== 'string' || message.trim() === '') return;
@@ -618,6 +674,7 @@ io.on('connection', (socket) => {
   socket.on('place-bet',    rateGuard('place-bet',    (data) => handlePlaceBet(socket, data)));
   socket.on('cash-out',     rateGuard('cash-out',     (data) => handleCashOut(socket, data)));
   socket.on('send-message', rateGuard('send-message', (data) => handleSendMessage(socket, data)));
+  socket.on('spin-slots',   rateGuard('spin-slots',   (data) => handleSlotsSpin(socket, data)));
 
   socket.on('disconnect', () => {
     socketRateLimits.delete(socket.id);
