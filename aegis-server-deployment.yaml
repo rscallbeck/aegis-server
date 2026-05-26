@@ -38,6 +38,45 @@ spec:
           - name: tls-certs
             mountPath: "/usr/src/app/certificates"
             readOnly: true
+
+        # ── Readiness probe ──────────────────────────────────────────────────
+        # K8s does not send traffic to a pod until this probe passes.
+        # Without it, the Service routes WebSocket connections while the game
+        # loop is still booting (fetchDailySeed + initVault can take 5–10 s),
+        # causing immediate connection errors that trigger client reconnects.
+        #
+        # initialDelaySeconds: 10 — give the Node.js process time to bind the port
+        #   and run the boot sequence before the first probe fires.
+        # periodSeconds: 5        — re-check every 5 s until healthy.
+        # failureThreshold: 3     — mark NotReady after 3 consecutive failures.
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3001
+            # Use HTTPS because the server terminates TLS itself.
+            # If you switch to HTTP-mode (no certs), change this to HTTP.
+            scheme: HTTPS
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
+
+        # ── Liveness probe ───────────────────────────────────────────────────
+        # If the game loop stalls (e.g., an unhandled promise rejection in
+        # runGameLoop locks up the event loop), the liveness probe detects it
+        # and K8s restarts the pod automatically.
+        #
+        # initialDelaySeconds: 20 — must be ≥ readiness initialDelaySeconds to
+        #   avoid restarting a pod that is still starting up.
+        # periodSeconds: 15       — check every 15 s (less aggressive than readiness).
+        # failureThreshold: 3     — restart after 3 consecutive failures (~45 s).
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3001
+            scheme: HTTPS
+          initialDelaySeconds: 20
+          periodSeconds: 15
+          failureThreshold: 3
       volumes:
       - name: tls-certs
         secret:

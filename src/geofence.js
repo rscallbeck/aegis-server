@@ -99,23 +99,79 @@ export function extractIp(reqOrHandshake) {
 }
 
 /**
+ * In-memory TTL cache for IP → country resolutions.
+ *
+ * Why this exists
+ * ───────────────
+ * ip-api.com free tier is capped at 45 requests/minute.  Without caching,
+ * every Socket.IO reconnect (from the same IP) triggers a fresh HTTP lookup.
+ * Under a reconnection storm this hits the rate limit almost immediately,
+ * causing subsequent lookups to fail → fail-open → all traffic passes through
+ * regardless of country.  Worse, each hanging lookup delays the Socket.IO
+ * handshake by up to GEO_LOOKUP_TIMEOUT_MS, causing more timeouts → more
+ * reconnects → more lookups.  The cache breaks this spiral.
+ *
+ * TTL is set to 1 hour.  Country assignments for an IP address change rarely;
+ * any security benefit of a shorter TTL is outweighed by the rate-limit risk.
+ *
+ * Cache entry shape: { countryCode: string|null, country: string|null, expiresAt: number }
+ */
+const geoCache = new Map();
+const GEO_CACHE_TTL_MS     = 60 * 60 * 1_000; // 1 hour TTL per entry
+const GEO_LOOKUP_TIMEOUT_MS = 3_000;           // abort ip-api.com fetch after 3 s
+
+// Prune expired cache entries once per hour so the Map doesn't grow
+// unboundedly in long-running production deployments with many unique IPs.
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of geoCache) {
+    if (now >= entry.expiresAt) geoCache.delete(ip);
+  }
+}, GEO_CACHE_TTL_MS);
+
+/**
  * Resolve an IP address to a two-letter ISO country code.
  * Uses ip-api.com free tier (45 req/min, HTTP only — called server-side only).
- * Returns null values on failure.
+ *
+ * Changes vs original:
+ *   • Checks geoCache before hitting the network.  Cache TTL = 1 hour.
+ *   • AbortController with a 3-second timeout so a slow/down ip-api.com
+ *     never stalls the Socket.IO handshake indefinitely.
+ *   • On success, result is written back to geoCache.
+ *
+ * Returns null values on failure (cache miss + lookup failure).
  */
 async function resolveCountry(ip) {
+  // ── Cache lookup ──────────────────────────────────────────────────────────
+  const cached = geoCache.get(ip);
+  if (cached && Date.now() < cached.expiresAt) {
+    return { countryCode: cached.countryCode, country: cached.country };
+  }
+
+  // ── Network lookup (with hard timeout) ───────────────────────────────────
+  const controller = new AbortController();
+  const timerId    = setTimeout(() => controller.abort(), GEO_LOOKUP_TIMEOUT_MS);
+
   try {
     const res = await fetch(
       `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode`,
+      { signal: controller.signal },
     );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.status === 'success') {
-      return { countryCode: data.countryCode, country: data.country };
+      const result = { countryCode: data.countryCode, country: data.country };
+      // Store in cache; overwrite any stale entry
+      geoCache.set(ip, { ...result, expiresAt: Date.now() + GEO_CACHE_TTL_MS });
+      return result;
     }
   } catch (err) {
-    console.warn(`[Geofence] Country lookup failed for ${ip}: ${err.message}`);
+    const reason = controller.signal.aborted ? 'timed out' : err.message;
+    console.warn(`[Geofence] Country lookup failed for ${ip}: ${reason}`);
+  } finally {
+    clearTimeout(timerId);
   }
+
   return { countryCode: null, country: null };
 }
 

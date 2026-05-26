@@ -112,7 +112,27 @@ if (fs.existsSync(KEY_PATH) && fs.existsSync(CERT_PATH)) {
 }
 
 const io = new Server(server, {
-  cors: { origin: CORS_ORIGIN, methods: ['GET', 'POST'] },
+  // ── CORS ────────────────────────────────────────────────────────────────
+  // CORS_ORIGIN must be set in .env / K8s secret.  Guard against undefined
+  // so the option is always a valid string rather than silently being
+  // `{ origin: undefined }`, which causes Socket.IO to omit the header
+  // entirely and lets some browsers block the WebSocket upgrade.
+  cors: {
+    origin:  CORS_ORIGIN ?? '*',
+    methods: ['GET', 'POST'],
+  },
+
+  // ── Heartbeat tuning ─────────────────────────────────────────────────────
+  // Default pingInterval (25 s) + pingTimeout (20 s) = 45 s total before a
+  // stalled connection is declared dead.  Raising pingTimeout to 30 s gives
+  // K8s kube-proxy and any intermediate NAT gateway enough breathing room to
+  // survive a brief packet loss without dropping the socket.
+  //
+  // These values are intentionally conservative — a genuine dead connection
+  // is detected no later than 25 + 30 = 55 s, which is still fast enough
+  // that a crashed server pod is noticed within one round of Crash.
+  pingInterval: 25_000, // ms between server → client PING frames
+  pingTimeout:  30_000, // ms the server waits for a PONG before disconnecting
 });
 
 // ─── Supabase ──────────────────────────────────────────────────────────────
