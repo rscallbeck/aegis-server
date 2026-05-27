@@ -120,16 +120,70 @@ export async function fetchDailySeed() {
       wallet,
     );
 
-    // ── Step 4: Send the VRF request transaction ──────────────────────────────
-    // Explicitly fetch the pending nonce to avoid collisions with other
-    // in-flight transactions from the house wallet.
-    console.log('📡 Sending requestNewSeed() to Base Sepolia...');
-    const currentNonce = await wallet.getNonce('pending');
-    const tx           = await vrfContract.requestNewSeed({ nonce: currentNonce });
+    // ── Step 4: Send the VRF request transaction (idempotent) ───────────────
+    // Problem: when K8s restarts the pod (rolling update, crash, etc.) the new
+    // pod's fetchDailySeed() runs again.  If the previous pod already submitted
+    // a requestNewSeed() tx that is still pending in the mempool, submitting
+    // the same nonce + calldata again gets a JSON-RPC -32000 "already known"
+    // error and the worker crashes — missing the eventual Chainlink response.
+    //
+    // Fix (two layers):
+    //   Layer 1 — Nonce check: compare latestNonce vs pendingNonce.  If they
+    //     differ, a tx from this wallet is already in the mempool; skip the
+    //     send and jump straight to polling.  Works when the RPC supports the
+    //     'pending' block tag (most do).
+    //   Layer 2 — Error catch: if the RPC returns "already known" anyway
+    //     (e.g. the provider collapses pending/latest), treat it as a
+    //     successful send and jump to polling.  Never re-throw this error.
+    //
+    // In either bypass case we start polling from currentBlock - 50 (~10 min
+    // of Base Sepolia blocks) so we don't miss an oracle response that arrived
+    // while the pod was being replaced.
 
-    console.log(`⏳ Transaction sent! Hash: ${tx.hash}`);
-    const receipt = await tx.wait(); // wait for 1 confirmation before polling
-    console.log('✅ Transaction confirmed. Waiting for Chainlink Oracle response...');
+    console.log('📡 Sending requestNewSeed() to Base Sepolia...');
+    let fromBlock;
+
+    try {
+      const latestNonce  = await wallet.getNonce('latest');
+      const pendingNonce = await wallet.getNonce('pending');
+
+      if (pendingNonce > latestNonce) {
+        // A tx from this wallet is already sitting in the mempool.
+        // This is normal after a pod restart — don't submit another.
+        console.log(
+          `⚠️  VRF request already pending in mempool (latest nonce: ${latestNonce}, ` +
+          `pending: ${pendingNonce}). Skipping re-submit — awaiting Chainlink response...`,
+        );
+        fromBlock = Math.max(0, (await provider.getBlockNumber()) - 50);
+      } else {
+        // No pending tx — safe to send a fresh VRF request.
+        const tx = await vrfContract.requestNewSeed({ nonce: latestNonce });
+        console.log(`⏳ Transaction sent! Hash: ${tx.hash}`);
+        const receipt = await tx.wait(); // wait for 1 confirmation before polling
+        console.log('✅ Transaction confirmed. Waiting for Chainlink Oracle response...');
+        fromBlock = receipt.blockNumber;
+      }
+
+    } catch (txErr) {
+      // Layer 2 fallback: RPC returned "already known" (-32000).
+      // This means an identical tx (same nonce + data) is already in the
+      // mempool.  It is NOT a fatal error — the oracle will still respond.
+      const msg = String(
+        txErr?.info?.error?.message ?? txErr?.error?.message ?? txErr?.message ?? '',
+      ).toLowerCase();
+      const isAlreadyKnown = msg.includes('already known') || txErr?.error?.code === -32000;
+
+      if (isAlreadyKnown) {
+        console.log(
+          `⚠️  eth_sendRawTransaction returned "already known" — ` +
+          `previous pod already submitted this VRF request. ` +
+          `Skipping re-submit — awaiting Chainlink response...`,
+        );
+        fromBlock = Math.max(0, (await provider.getBlockNumber()) - 50);
+      } else {
+        throw txErr; // genuine unexpected error — let the outer catch log it
+      }
+    }
 
     // ── Step 5: Poll for the SeedGenerated event ──────────────────────────────
     // We poll eth_getLogs every 15 s for up to 10 minutes.  Chainlink VRF on
@@ -137,7 +191,6 @@ export async function fetchDailySeed() {
     //
     // queryFilter() is used instead of filter listeners because most public
     // RPC providers do not support eth_getFilterChanges (WebSocket filter API).
-    const fromBlock = receipt.blockNumber; // start scanning from the request block
     const deadline  = Date.now() + 10 * 60 * 1000; // 10-minute timeout
 
     while (Date.now() < deadline) {

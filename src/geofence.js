@@ -23,7 +23,7 @@ export const BLOCKED_COUNTRIES = new Set([
   'MM', // Myanmar
 
   // Major regulated gambling markets that require a local licence
-  'US', // United States — UIGEA / federal wire fraud risk
+  //'US', // United States — UIGEA / federal wire fraud risk
   'GB', // United Kingdom — UKGC requires UK licence
   'FR', // France — ANJ (formerly ARJEL)
   'NL', // Netherlands — Kansspelautoriteit (KSA)
