@@ -9,6 +9,7 @@
     "dev": "tsx watch server.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.99.2",
     "autoprefixer": "^10.4.27",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -17,7 +18,6 @@
     "node": "^22",
     "node-cron": "^4.2.1",
     "postcss": "^8.5.8",
-    "@supabase/supabase-js": "^2.99.2",
     "socket.io": "^4.7.4",
     "tsx": "^4.21.0",
     "ws": "^8.20.0"
@@ -25,6 +25,7 @@
   "devDependencies": {
     "@types/node": "^22",
     "supabase": "^2.98.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.95.0"
   }
 }
