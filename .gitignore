@@ -33,7 +33,7 @@ certificates
 
 # production
 /build
-/pubic/
+/public/
 
 # misc
 .DS_Store

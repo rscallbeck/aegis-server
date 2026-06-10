@@ -15,4 +15,6 @@ USER node
 
 EXPOSE 3001
 
-CMD ["npx", "tsx", "server.js"]
+# server.js is plain ES module JS — no transpilation needed in production.
+# tsx is a dev tool; using node directly is faster and avoids a dev dependency in prod.
+CMD ["node", "server.js"]
